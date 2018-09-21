@@ -22,6 +22,7 @@ import com.cybozu.labs.langdetect.LangDetectException;
 import com.google.common.base.Supplier;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import java.util.Set;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.ar.ArabicAnalyzer;
@@ -123,7 +124,7 @@ public class TermExtractionService {
      */
     public TermExtractionService(final boolean shortMessages) {
         try {
-            detectorFactory = new DetectorFactory(shortMessages);
+            detectorFactory = DetectorFactory.fromProfilesOnClasspath(shortMessages);
             analyzers = initializeAnalyzers();
         } catch (final LangDetectException e) {
             throw new TextAnalysisException("Failed to create language detector factory", e);
@@ -180,7 +181,7 @@ public class TermExtractionService {
 
     private Map<String, Supplier<Analyzer>> initializeAnalyzers() {
         final Map<String, Supplier<Analyzer>> result = Maps.newHashMap();
-        final List<String> languages = detectorFactory.getLangList();
+        final Set<String> languages = detectorFactory.getLangList();
 
         for (final String language : languages) {
             final Supplier<Analyzer> analyzer = ANALYZERS_BY_LANGUAGE.getOrDefault(language, StandardAnalyzer::new);

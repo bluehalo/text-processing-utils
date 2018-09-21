@@ -2,6 +2,9 @@ package com.cybozu.labs.langdetect;
 
 import com.cybozu.labs.langdetect.util.LangProfile;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Arrays;
+import java.util.Set;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.kgusarov.textprocessing.langdetect.LangProfileDocument;
@@ -25,24 +28,18 @@ public class DetectorTest {
 
         LangProfileDocument lpd = mapper.readValue(String.format(PROFILE_TEMPLATE, "en"), LangProfileDocument.class);
         final LangProfile en = new LangProfile(lpd);
-        for (final String w : TRAINING_EN.split(" ")) {
-            en.add(w);
-        }
-        detectorFactory.addProfile(en, 0, 3);
+        Arrays.stream(TRAINING_EN.split(" ")).forEach(w -> en.add(w));
+        detectorFactory.addProfile(en);
 
         lpd = mapper.readValue(String.format(PROFILE_TEMPLATE, "fr"), LangProfileDocument.class);
         final LangProfile fr = new LangProfile(lpd);
-        for (final String w : TRAINING_FR.split(" ")) {
-            fr.add(w);
-        }
-        detectorFactory.addProfile(fr, 1, 3);
+        Arrays.stream(TRAINING_FR.split(" ")).forEach(w -> fr.add(w));
+        detectorFactory.addProfile(fr);
 
         lpd = mapper.readValue(String.format(PROFILE_TEMPLATE, "ja"), LangProfileDocument.class);
         final LangProfile ja = new LangProfile(lpd);
-        for (final String w : TRAINING_JA.split(" ")) {
-            ja.add(w);
-        }
-        detectorFactory.addProfile(ja, 2, 3);
+        Arrays.stream(TRAINING_JA.split(" ")).forEach(w -> ja.add(w));
+        detectorFactory.addProfile(ja);
     }
 
     @Test
@@ -79,17 +76,17 @@ public class DetectorTest {
 
     @Test
     public final void testLangList() throws LangDetectException {
-        final List<String> langList = detectorFactory.getLangList();
+        final Set<String> langList = detectorFactory.getLangList();
 
         assertEquals(3, langList.size());
-        assertEquals("en", langList.get(0));
-        assertEquals("fr", langList.get(1));
-        assertEquals("ja", langList.get(2));
+        Assert.assertTrue(langList.contains("en"));
+        Assert.assertTrue(langList.contains("fr"));
+        Assert.assertTrue(langList.contains("ja"));
     }
 
     @Test(expected = UnsupportedOperationException.class)
     public final void testLangListException() throws LangDetectException {
-        final List<String> langList = detectorFactory.getLangList();
+        final Set<String> langList = detectorFactory.getLangList();
 
         langList.add("hoge");
     }

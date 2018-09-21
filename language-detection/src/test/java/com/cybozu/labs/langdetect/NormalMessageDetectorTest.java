@@ -85,7 +85,7 @@ public class NormalMessageDetectorTest {
         this.s = s;
         this.expectedLang = expectedLang;
 
-        final DetectorFactory detectorFactory = new DetectorFactory(false);
+        final DetectorFactory detectorFactory = DetectorFactory.fromProfilesOnClasspath(false);
         detector = detectorFactory.create();
     }
 

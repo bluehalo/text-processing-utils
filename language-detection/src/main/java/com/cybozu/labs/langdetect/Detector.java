@@ -103,14 +103,9 @@ public class Detector {
     private double[] priorMap;
     private boolean verbose;
 
-    /**
-     * Detector instance can be constructed via {@link DetectorFactory#create()}.
-     *
-     * @param factory {@link DetectorFactory} instance (only DetectorFactory inside)
-     */
-    Detector(final DetectorFactory factory) {
-        languageProbabilityMap = factory.languageProbabilityMap;
-        languageList = factory.languages;
+    Detector(final Map<String, double[]> languageProbabilityMap, List<String> languages) {
+        this.languageProbabilityMap = languageProbabilityMap;
+        this.languageList = languages;
     }
 
     /**
