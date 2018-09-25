@@ -23,8 +23,10 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Table;
+import com.google.common.io.Resources;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -91,6 +93,15 @@ public class DetectorFactory {
     }
 
     private final Table<String, String, Double> nGramToLanguageToProbability = HashBasedTable.create();
+
+    /**
+     * Adds a profile to this DetectorFactory from a URL resource.
+     */
+    public DetectorFactory addProfile(URL profileToAdd) throws IOException {
+        try (InputStream in = Resources.asByteSource(profileToAdd).openStream()) {
+            return addProfile(in);
+        }
+    }
 
     /**
      * Adds a profile to this DetectorFactory.  Does not close or flush the stream.
