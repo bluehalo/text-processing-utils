@@ -9,8 +9,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.kgusarov.textprocessing.langdetect.LangProfileDocument;
 
-import java.util.List;
-
 import static org.junit.Assert.assertEquals;
 
 public class DetectorTest {
@@ -23,23 +21,24 @@ public class DetectorTest {
 
     @Before
     public void setUp() throws Exception {
-        detectorFactory = new DetectorFactory();
+        DetectorFactory.Builder builder = new DetectorFactory.Builder();
         final ObjectMapper mapper = new ObjectMapper();
 
         LangProfileDocument lpd = mapper.readValue(String.format(PROFILE_TEMPLATE, "en"), LangProfileDocument.class);
         final LangProfile en = new LangProfile(lpd);
         Arrays.stream(TRAINING_EN.split(" ")).forEach(w -> en.add(w));
-        detectorFactory.addProfile(en);
+        builder.addProfile(en);
 
         lpd = mapper.readValue(String.format(PROFILE_TEMPLATE, "fr"), LangProfileDocument.class);
         final LangProfile fr = new LangProfile(lpd);
         Arrays.stream(TRAINING_FR.split(" ")).forEach(w -> fr.add(w));
-        detectorFactory.addProfile(fr);
+        builder.addProfile(fr);
 
         lpd = mapper.readValue(String.format(PROFILE_TEMPLATE, "ja"), LangProfileDocument.class);
         final LangProfile ja = new LangProfile(lpd);
         Arrays.stream(TRAINING_JA.split(" ")).forEach(w -> ja.add(w));
-        detectorFactory.addProfile(ja);
+        builder.addProfile(ja);
+        detectorFactory = builder.build();
     }
 
     @Test

@@ -21,14 +21,13 @@ import com.cybozu.labs.langdetect.util.NGram;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.HashBasedTable;
-import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Table;
 import com.google.common.io.Resources;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -79,7 +78,7 @@ public class DetectorFactory {
 
         final int languageCount = resources.size();
         final ClassLoader cl = Thread.currentThread().getContextClassLoader();
-        final DetectorFactory detector = new DetectorFactory();
+        final Builder detector = new Builder();
         for (int i = 0; i < languageCount; i++) {
             final String profile = resources.get(i);
             try (final InputStream is = cl.getResourceAsStream(profile)) {
@@ -89,33 +88,17 @@ public class DetectorFactory {
                         "Failed to read language profile", e);
             }
         }
-        return detector;
+        return detector.build();
     }
 
-    private final Table<String, String, Double> nGramToLanguageToProbability = HashBasedTable.create();
+    private final ImmutableSortedSet<String> languages;
+    private final ImmutableMap<String, double[]> nGramToProbabilities;
 
-    /**
-     * Adds a profile to this DetectorFactory from a URL resource.
-     */
-    public DetectorFactory addProfile(URL profileToAdd) throws IOException {
-        try (InputStream in = Resources.asByteSource(profileToAdd).openStream()) {
-            return addProfile(in);
-        }
-    }
-
-    /**
-     * Adds a profile to this DetectorFactory.  Does not close or flush the stream.
-     */
-    public DetectorFactory addProfile(InputStream profileToAdd) {
-        try {
-            LangProfileDocument lpd = JACKSON.readValue(profileToAdd, LangProfileDocument.class);
-            LangProfile langProfile = new LangProfile(lpd);
-            addProfile(langProfile);
-        } catch (final IOException e) {
-            throw new LangDetectException(ErrorCode.FAILED_TO_INITIALIZE,
-                    "Failed to read language profile", e);
-        }
-        return this;
+    public DetectorFactory(
+            ImmutableSortedSet<String> languages,
+            ImmutableMap<String, double[]> nGramToProbabilities) {
+        this.languages = languages;
+        this.nGramToProbabilities = nGramToProbabilities;
     }
 
     /**
@@ -125,7 +108,7 @@ public class DetectorFactory {
      * @throws LangDetectException In case factory contains no language profiles
      */
     public Detector create() {
-        return createDetector();
+        return new Detector(nGramToProbabilities, languages.asList());
     }
 
     /**
@@ -136,56 +119,86 @@ public class DetectorFactory {
      * @throws LangDetectException In case factory contains no language profiles
      */
     public Detector create(final double alpha) {
-        final Detector detector = createDetector();
+        final Detector detector = create();
         detector.setAlpha(alpha);
         return detector;
     }
 
-    private Detector createDetector() {
-        if (nGramToLanguageToProbability.columnKeySet().isEmpty()) {
-            throw new LangDetectException(ErrorCode.PROFILE_NOT_LOADED,
-                    "No language profile classes found");
-        }
-
-        // pick a "sorted" list of languages
-        List<String> languages = new ArrayList(getLangList());
-        Map<String, double[]> nGramToProbabilities = new HashMap<>();
-
-        for (Entry<String, Map<String, Double>> row : nGramToLanguageToProbability.rowMap().entrySet()) {
-            double[] sortedProbabilities = languages.stream()
-                    .map(lang -> row.getValue().get(lang))
-                    .map(prob -> prob != null ? prob : 0)
-                    .mapToDouble(Double::doubleValue)
-                    .toArray();
-            nGramToProbabilities.put(row.getKey(), sortedProbabilities);
-        }
-        return new Detector(nGramToProbabilities, languages);
-    }
-
     public Set<String> getLangList() {
-        return ImmutableSet.copyOf(nGramToLanguageToProbability.columnKeySet());
+        return languages;
     }
 
-    @VisibleForTesting
-    void addProfile(final LangProfile profile) {
-        String language = profile.getName();
+    public static class Builder {
+        private final Table<String, String, Double> nGramToLangToProbability =
+                HashBasedTable.create();
 
-        if (nGramToLanguageToProbability.containsColumn(language)) {
-            throw new LangDetectException(ErrorCode.DUPLICATE_LANGUAGE,
-                    language + " language profile is already defined");
+        /**
+         * Adds a profile to this DetectorFactory from a URL resource.
+         */
+        public Builder addProfile(URL profileToAdd) throws IOException {
+            try (InputStream in = Resources.asByteSource(profileToAdd).openStream()) {
+                return addProfile(in);
+            }
         }
 
-        for (final Map.Entry<String, Integer> entry : profile.getFrequencies().entrySet()) {
-            String ngram = entry.getKey();
-            int nGramLength = ngram.length();
-            int[] nGramCount = profile.getNGramCount();
-            if (nGramLength >= 1 && nGramLength <= NGram.MAX_NGRAM_LENGTH) {
-                double count = entry.getValue().doubleValue();
-                double probability = count / nGramCount[nGramLength - 1];
-                nGramToLanguageToProbability.put(ngram, language, probability);
-            } else {
-                LOGGER.warn("Invalid n-gram in language profile: {}", ngram);
+        /**
+         * Adds a profile to this DetectorFactory.  Does not close or flush the stream.
+         */
+        public Builder addProfile(InputStream profileToAdd) {
+            try {
+                LangProfileDocument lpd = JACKSON.readValue(profileToAdd, LangProfileDocument.class);
+                LangProfile langProfile = new LangProfile(lpd);
+                addProfile(langProfile);
+            } catch (final IOException e) {
+                throw new LangDetectException(ErrorCode.FAILED_TO_INITIALIZE,
+                        "Failed to read language profile", e);
             }
+            return this;
+        }
+
+        @VisibleForTesting
+        void addProfile(final LangProfile profile) {
+            String language = profile.getName();
+
+            if (nGramToLangToProbability.containsColumn(language)) {
+                throw new LangDetectException(ErrorCode.DUPLICATE_LANGUAGE,
+                        language + " language profile is already defined");
+            }
+
+            for (final Map.Entry<String, Integer> entry : profile.getFrequencies().entrySet()) {
+                String ngram = entry.getKey();
+                int nGramLength = ngram.length();
+                int[] nGramCount = profile.getNGramCount();
+                if (nGramLength >= 1 && nGramLength <= NGram.MAX_NGRAM_LENGTH) {
+                    double count = entry.getValue().doubleValue();
+                    double probability = count / nGramCount[nGramLength - 1];
+                    nGramToLangToProbability.put(ngram, language, probability);
+                } else {
+                    LOGGER.warn("Invalid n-gram in language profile: {}", ngram);
+                }
+            }
+        }
+
+        public DetectorFactory build() {
+            if (nGramToLangToProbability.columnKeySet().isEmpty()) {
+                throw new LangDetectException(ErrorCode.PROFILE_NOT_LOADED,
+                        "No language profile classes found");
+            }
+
+            // pick a "sorted" list of languages
+            ImmutableSortedSet<String> languages = ImmutableSortedSet
+                    .copyOf(nGramToLangToProbability.columnKeySet());
+
+            ImmutableMap.Builder<String, double[]> nGramToProbabilities = ImmutableMap.builder();
+            for (Entry<String, Map<String, Double>> row : nGramToLangToProbability.rowMap().entrySet()) {
+                double[] sortedProbabilities = languages.stream()
+                        .map(lang -> row.getValue().get(lang))
+                        .map(prob -> prob != null ? prob : 0)
+                        .mapToDouble(Double::doubleValue)
+                        .toArray();
+                nGramToProbabilities.put(row.getKey(), sortedProbabilities);
+            }
+            return new DetectorFactory(languages, nGramToProbabilities.build());
         }
     }
 }
